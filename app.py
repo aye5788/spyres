@@ -85,5 +85,8 @@ else:
 
 # Auto-refresh every 30 seconds
 st.write("🔄 **Auto-refreshing every 30 seconds...**")
-st.experimental_rerun()
+st.session_state.refresh = st.button("🔄 Refresh Now")
+
+if st.session_state.refresh:
+    st.rerun()
 
