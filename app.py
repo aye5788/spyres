@@ -1,10 +1,12 @@
+
 import streamlit as st
 import requests
 import numpy as np
 import pandas as pd
 from scipy.stats import beta  # Bayesian beta distribution
+from textblob import TextBlob  # NLP for sentiment analysis
 
-# Set wide layout to minimize scrolling
+# Set wide layout for better readability
 st.set_page_config(layout="wide")
 
 # FMP API Key from Streamlit Secrets
@@ -38,8 +40,29 @@ def get_historical_data():
         return df.dropna()
     return None
 
-# Function to estimate probability of breaking key levels using Bayesian inference
-def calculate_bayesian_probabilities(current_price, current_volume, df):
+# Function to fetch real-time news for SPY
+def get_spy_news():
+    url = f"https://financialmodelingprep.com/api/v3/stock_news?tickers=SPY&limit=5&apikey={FMP_API_KEY}"
+    response = requests.get(url)
+    data = response.json()
+
+    news_headlines = []
+    sentiment_scores = []
+    
+    if response.status_code == 200 and data:
+        for article in data[:5]:  # Get top 5 latest news articles
+            headline = article["title"]
+            news_headlines.append(headline)
+            
+            # Perform sentiment analysis
+            sentiment = TextBlob(headline).sentiment.polarity  # Score between -1 (negative) to 1 (positive)
+            sentiment_scores.append(sentiment)
+    
+    avg_sentiment = np.mean(sentiment_scores) if sentiment_scores else 0
+    return news_headlines, avg_sentiment
+
+# Function to estimate probability of breaking key levels using Bayesian inference + News Sentiment
+def calculate_bayesian_probabilities(current_price, current_volume, df, sentiment_score):
     if df is None or df.empty:
         return "Data unavailable"
 
@@ -53,36 +76,45 @@ def calculate_bayesian_probabilities(current_price, current_volume, df):
         recent_momentum = df["returns"].rolling(5).mean().iloc[-1]  
         volume_factor = current_volume / avg_volume  
 
+        # Bayesian probability estimation: Prior based on distance, adjusted by momentum & volume
         alpha = 1 + (1 - distance) * 5  
         beta_val = 1 + max(0, -recent_momentum * 10) + (1 / max(volume_factor, 1))  
 
         prob = beta(alpha, beta_val).mean()  
-        probabilities[level] = round(prob * 100, 2)  
+
+        # Adjust probability based on news sentiment (Positive sentiment increases breakout chance, Negative increases breakdown)
+        if level in RESISTANCE_LEVELS:
+            prob += sentiment_score * 5  # Boost breakout probability for positive news
+        else:
+            prob -= sentiment_score * 5  # Increase breakdown probability for negative news
+
+        probabilities[level] = round(max(0, min(prob * 100, 100)), 2)  
 
     return probabilities
 
 # Streamlit App UI
-st.markdown("<h1 style='text-align: center;'>📈 Bayesian SPY Price Tracker</h1>", unsafe_allow_html=True)
-st.markdown("<h5 style='text-align: center; color: gray;'>Uses Bayesian inference to estimate SPY breakout/breakdown probabilities.</h5>", unsafe_allow_html=True)
+st.markdown("<h1 style='text-align: center;'>📈 Bayesian SPY Tracker with News Sentiment</h1>", unsafe_allow_html=True)
 
-# Get real-time price & volume
+# Get real-time price, volume, and news sentiment
 spy_price, spy_volume = get_real_time_spy_data()
+news_headlines, sentiment_score = get_spy_news()
 
 if spy_price and spy_volume:
-    # Use Streamlit columns to organize layout (side-by-side)
+    # Use Streamlit columns to organize layout
     col1, col2 = st.columns([1, 2])
 
     with col1:
         st.metric(label="📊 SPY Price", value=f"${spy_price:.2f}")
         st.metric(label="📊 Volume", value=f"{spy_volume:,}")
+        st.metric(label="📰 News Sentiment", value=f"{sentiment_score:.2f}")
 
     with col2:
         df = get_historical_data()
-        probabilities = calculate_bayesian_probabilities(spy_price, spy_volume, df)
+        probabilities = calculate_bayesian_probabilities(spy_price, spy_volume, df, sentiment_score)
 
         st.markdown("<h3 style='text-align: center;'>📍 Bayesian Key Levels & Probabilities</h3>", unsafe_allow_html=True)
 
-        # Create two columns for Support & Resistance to avoid scrolling
+        # Organize Key Levels into Two Columns
         col_support, col_resistance = st.columns(2)
 
         with col_support:
@@ -109,13 +141,15 @@ if spy_price and spy_volume:
         else:
             st.success("✅ No extreme risk detected.")
 
+    # Display recent news headlines
+    st.markdown("### 📰 Latest SPY News & Sentiment")
+    for headline in news_headlines:
+        st.write(f"- {headline}")
+
 else:
     st.error("⚠️ Error fetching real-time SPY data.")
 
-# Auto-refresh settings at the bottom
+# Auto-refresh settings
 st.markdown("---")
-col_refresh, col_button = st.columns([3, 1])
-col_refresh.write("🔄 **Auto-refreshing every 30 seconds...**")
-
-if col_button.button("🔄 Refresh Now"):
+if st.button("🔄 Refresh Now"):
     st.rerun()
