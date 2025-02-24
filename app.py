@@ -1,4 +1,3 @@
-
 import streamlit as st
 import requests
 import numpy as np
@@ -61,7 +60,7 @@ def get_spy_news():
     avg_sentiment = np.mean(sentiment_scores) if sentiment_scores else 0
     return news_headlines, avg_sentiment
 
-# Function to estimate probability of breaking key levels using Bayesian inference + News Sentiment
+# Function to estimate probability of breaking key levels using Bayesian inference
 def calculate_bayesian_probabilities(current_price, current_volume, df, sentiment_score):
     if df is None or df.empty:
         return "Data unavailable"
@@ -82,18 +81,20 @@ def calculate_bayesian_probabilities(current_price, current_volume, df, sentimen
 
         prob = beta(alpha, beta_val).mean()  
 
-        # Adjust probability based on news sentiment (Positive sentiment increases breakout chance, Negative increases breakdown)
+        # Adjust probability based on news sentiment (with limited impact)
+        sentiment_weight = 0.3  # Control how much sentiment influences probability
         if level in RESISTANCE_LEVELS:
-            prob += sentiment_score * 5  # Boost breakout probability for positive news
+            prob += sentiment_score * sentiment_weight  # Boost breakout probability for positive news
         else:
-            prob -= sentiment_score * 5  # Increase breakdown probability for negative news
+            prob -= sentiment_score * sentiment_weight  # Increase breakdown probability for negative news
 
+        # Normalize probabilities to stay within realistic range (0 to 100)
         probabilities[level] = round(max(0, min(prob * 100, 100)), 2)  
 
     return probabilities
 
 # Streamlit App UI
-st.markdown("<h1 style='text-align: center;'>📈 Bayesian SPY Tracker with News Sentiment</h1>", unsafe_allow_html=True)
+st.markdown("<h1 style='text-align: center;'>📈 Bayesian SPY Tracker</h1>", unsafe_allow_html=True)
 
 # Get real-time price, volume, and news sentiment
 spy_price, spy_volume = get_real_time_spy_data()
