@@ -83,12 +83,19 @@ if spy_price and spy_volume:
         else:
             st.write(f"🟢 **Support at ${level:.2f}** → Probability of Breakdown: **{probabilities[level]}%**")
 
-    # Highlight potential trade signals
-    if any(prob > 70 for prob in probabilities.values()):
-        st.warning("⚠️ High probability of a breakout or breakdown detected!")
-    else:
-        st.success("✅ No extreme risk detected.")
+    # Determine the highest probability event
+highest_prob_level = max(probabilities, key=probabilities.get)
+highest_prob_value = probabilities[highest_prob_level]
 
+if highest_prob_value > 70:
+    if highest_prob_level in RESISTANCE_LEVELS:
+        st.warning(f"⚠️ **SPY has a {highest_prob_value:.2f}% chance of breaking RESISTANCE at ${highest_prob_level:.2f}.**")
+        st.write("📈 **This suggests increased bullish momentum. Watch for a breakout!**")
+    else:
+        st.warning(f"⚠️ **SPY has a {highest_prob_value:.2f}% chance of breaking SUPPORT at ${highest_prob_level:.2f}.**")
+        st.write("📉 **This suggests downside pressure. Watch for a breakdown!**")
+else:
+    st.success("✅ No extreme risk detected.")
 else:
     st.error("⚠️ Error fetching real-time SPY data.")
 
